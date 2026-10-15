@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from uuid import uuid4
+
 from argus_contracts.artifacts import RunArtifactLayout
 from argus_contracts.models import RunEvent, RunMetrics, RunSummary, TestResult
 
@@ -13,10 +14,11 @@ from argus.state.test_case import TestCase
 
 
 async def run_qa(target_url: str, spec: str, journeys: list[TestCase] | None = None,
-                 output_dir: Path | None = None, *, record_video: bool = False) -> dict:
+                 output_dir: Path | None = None, *, record_video: bool = False,
+                 run_id: str | None = None) -> dict:
     output_dir = output_dir or settings.artifact_dir
     output_dir.mkdir(parents=True, exist_ok=True)
-    run_id = uuid4().hex
+    run_id = run_id or uuid4().hex
     layout = RunArtifactLayout(output_dir / "runs", run_id).initialize()
     layout.append_event(RunEvent(id=uuid4().hex, run_id=run_id, agent="supervisor",
                                  correlation_id=run_id, type="run_started",

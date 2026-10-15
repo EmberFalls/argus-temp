@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import typer
@@ -60,8 +60,8 @@ def default_run(
     ctx: typer.Context,
     url: str | None = typer.Option(None, help="Target web application URL"),
     spec: str | None = typer.Option(None, help="Short description of expected application behavior"),
-    output: Path = typer.Option(settings.artifact_dir, help="Directory for run evidence"),
-    journeys: Path | None = typer.Option(None, help="JSON file containing explicit TestCase objects"),
+    output: Path = typer.Option(settings.artifact_dir, help="Directory for run evidence"),  # noqa: B008
+    journeys: Path | None = typer.Option(None, help="JSON file containing explicit TestCase objects"),  # noqa: B008
     stubs: bool = typer.Option(False, "--stubs", help="Run all role interfaces against golden fixtures; no browser or network required"),
     real: str | None = typer.Option(
         None, "--real", help="Comma-separated roles to replace (for example: explorer,tester)"
@@ -76,8 +76,8 @@ def default_run(
 def run(
     url: str | None = typer.Option(None, help="Target web application URL"),
     spec: str | None = typer.Option(None, help="Short description of expected application behavior"),
-    output: Path = typer.Option(settings.artifact_dir, help="Directory for run evidence"),
-    journeys: Path | None = typer.Option(None, help="JSON file containing explicit TestCase objects"),
+    output: Path = typer.Option(settings.artifact_dir, help="Directory for run evidence"),  # noqa: B008
+    journeys: Path | None = typer.Option(None, help="JSON file containing explicit TestCase objects"),  # noqa: B008
     stubs: bool = typer.Option(False, "--stubs", help="Run all role interfaces against golden fixtures; no browser or network required"),
     real: str | None = typer.Option(
         None, "--real", help="Comma-separated roles to replace (for example: explorer,tester)"
@@ -98,7 +98,7 @@ def _default_snapshot_path(url: str) -> Path:
 @app.command()
 def snapshot(
     url: str = typer.Argument(..., help="HTTP(S) page URL to snapshot"),
-    output: Path | None = typer.Option(None, "--output", help="JSON output file (default: artifacts/snapshots/<page>.json)"),
+    output: Path | None = typer.Option(None, "--output", help="JSON output file (default: artifacts/snapshots/<page>.json)"),  # noqa: B008
     max_tokens: int = typer.Option(1500, "--max-tokens", min=1, max=1500,
                                    help="Maximum estimated tokens in the compact prompt rendering"),
 ) -> None:

@@ -1,23 +1,53 @@
-import { useState } from "react";
-import type { CreateRunRequest, RunMetrics, RunSummary } from "@/lib/generated/contracts";
+import { useEffect, useState } from "react";
+import type { CreateRunRequest, RunMetrics } from "@/lib/generated/contracts";
 import { argusApiUrl } from "@/lib/api";
+import { useRunEvents } from "@/lib/use-run-events";
+
+interface AcceptedRun {
+  run_id: string;
+  events_url: string;
+}
 
 export default function HomePage() {
   const [url, setUrl] = useState("");
   const [spec, setSpec] = useState("");
   const [status, setStatus] = useState("Runs are executed by the local Argus API.");
   const [metrics, setMetrics] = useState<RunMetrics | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const stream = useRunEvents(activeRunId);
+
+  useEffect(() => {
+    if (!activeRunId) return;
+    if (stream.status === "completed") {
+      setMetrics(stream.metrics);
+      setStatus("Run complete. Evidence was saved by the agent.");
+    } else if (stream.status === "failed" || stream.status === "error") {
+      setStatus(stream.error ?? "Unable to follow the run event stream.");
+    } else if (stream.events.length > 0) {
+      const latest = stream.events[stream.events.length - 1];
+      setStatus(`Run ${activeRunId.slice(0, 8)} · ${latest.type.replaceAll("_", " ")}`);
+    } else if (stream.status === "connecting") {
+      setStatus(stream.error ?? "Connecting to the run event stream…");
+    }
+  }, [activeRunId, stream]);
+
   async function startRun(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setStatus("Starting browser run…"); setMetrics(null);
+    event.preventDefault(); setStatus("Starting browser run…"); setMetrics(null); setActiveRunId(null);
     try {
       const request: CreateRunRequest = { url, spec };
+      const headers = new Headers();
+      if (import.meta.env.VITE_ARGUS_API_TOKEN) {
+        headers.set("Authorization", `Bearer ${import.meta.env.VITE_ARGUS_API_TOKEN}`);
+      }
+      headers.set("Content-Type", "application/json");
       const response = await fetch(`${argusApiUrl}/runs`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request),
+        method: "POST", headers, body: JSON.stringify(request),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Run failed");
-      const result = data as RunSummary;
-      setMetrics(result.metrics); setStatus("Run complete. Evidence was saved by the agent.");
+      const run = data as AcceptedRun;
+      setStatus(`Run ${run.run_id.slice(0, 8)} queued. Connecting to its event stream…`);
+      setActiveRunId(run.run_id);
     } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to reach Argus API."); }
   }
   return <main className="shell">

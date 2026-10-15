@@ -4,18 +4,26 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict, deque
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from argus_contracts.artifacts import RunArtifactLayout
-from argus_contracts.models import ConsoleEvent, Evidence, NetworkEvent, Step, StepEvidence
+from argus_contracts.models import (
+    ConsoleEvent,
+    Evidence,
+    NetworkEvent,
+    Step,
+    StepEvidence,
+)
+from playwright.async_api import Error as PlaywrightError
 
 if TYPE_CHECKING:
     from playwright.async_api import Locator
+
     from argus.browser.session import BrowserSession
 
-_SECRET_LOCATOR = re.compile(r"password|passcode|secret|token|api[-_ ]?key|authorization|credential", re.I)
+_SECRET_LOCATOR = re.compile(r"password|passcode|secret|token|api[-_ ]?key|authorization|credential", re.IGNORECASE)
 _SECRET_ASSIGNMENT = re.compile(
     r"(?i)(\b(?:password|passwd|passcode|secret|access[_-]?token|refresh[_-]?token|token|api[_-]?key|authorization|credential)\b\s*[:=]\s*)(Bearer\s+[^\s&;,]+|\"[^\"]*\"|'[^']*'|[^\s&;,]+)"
 )
@@ -35,13 +43,18 @@ class EvidenceRedactor:
 
     @classmethod
     def for_steps(cls, steps: Iterable[Step], *, secret_values: Iterable[str] = (),
-                  synthetic_values: Iterable[str] = ()) -> "EvidenceRedactor":
+                  synthetic_values: Iterable[str] = ()) -> EvidenceRedactor:
         synthetic = {str(value) for value in synthetic_values if str(value)}
         secrets = {str(value) for value in secret_values if str(value)}
         for step in steps:
-            if step.action == "fill" and step.value and _SECRET_LOCATOR.search(step.locator):
-                if step.value not in synthetic:
-                    secrets.add(step.value)
+            if (
+                step.action == "fill"
+                and step.value
+                and step.locator
+                and _SECRET_LOCATOR.search(step.locator)
+                and step.value not in synthetic
+            ):
+                secrets.add(step.value)
         return cls(secret_values=secrets, synthetic_values=synthetic)
 
     def redact_text(self, value: str | None) -> str | None:
@@ -119,7 +132,7 @@ class EvidenceRecorder:
 
     @staticmethod
     def _now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     @staticmethod
     def _request_key(request: Any) -> tuple[int, str, str]:
@@ -181,7 +194,7 @@ class EvidenceRecorder:
                 if _SECRET_LOCATOR.search(field_name) and step.value not in self.redactor.synthetic_values:
                     self.redactor.secret_values.add(step.value)
                     sensitive = True
-            except Exception:
+            except PlaywrightError:
                 pass
         if element is None:
             return
@@ -193,7 +206,7 @@ class EvidenceRecorder:
             if sensitive:
                 screenshot_options.update(mask=[element], mask_color="#000000")
             await element.first.screenshot(**screenshot_options)
-        except Exception:
+        except PlaywrightError:
             return
 
     async def finish_step(self, step_index: int) -> StepEvidence:
@@ -204,13 +217,13 @@ class EvidenceRecorder:
                                        mask=self._sensitive_locators, mask_color="#000000")
             screenshot_path: str | None = str(screenshot)
             self.screenshots.append(screenshot_path)
-        except Exception:
+        except PlaywrightError:
             screenshot_path = None
         element_path = self.paths["screenshots"] / f"step-{step_index:03d}-element.png"
         element_screenshot = str(element_path) if element_path.is_file() else None
         try:
             dom_snapshot = await self.page.locator("body").aria_snapshot()
-        except Exception:
+        except PlaywrightError:
             dom_snapshot = None
         dom_snapshot = self.redactor.redact_text(dom_snapshot)
         evidence = StepEvidence(

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+
+from argus_contracts.artifacts import RunArtifactLayout
+from argus_contracts.models import Evidence
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
 from argus.browser.session import BrowserSession
 from argus.evidence.recorder import EvidenceRecorder
 from argus.perception.a11y import resolve_semantic_locator
-from argus_contracts.artifacts import RunArtifactLayout
-from argus_contracts.models import Evidence
 from argus.state.test_case import Step, TestCase
 
 
@@ -24,7 +26,7 @@ async def execute_case(session: BrowserSession, case: TestCase, layout: RunArtif
         recorder.current_step_index = 0
         try:
             await page.goto(initial_url, wait_until="domcontentloaded", timeout=30000)
-        except Exception as exc:
+        except PlaywrightError as exc:
             verdict, actual = "FAIL", f"{type(exc).__name__}: {exc}"
     for step_index, step in enumerate(case.steps):
         if verdict == "FAIL":
@@ -36,7 +38,7 @@ async def execute_case(session: BrowserSession, case: TestCase, layout: RunArtif
         )
         try:
             await _run_step(page, step)
-        except Exception as exc:
+        except PlaywrightError as exc:
             verdict, actual = "FAIL", f"{type(exc).__name__}: {exc}"
         await recorder.finish_step(step_index)
         if verdict == "FAIL":

@@ -6,7 +6,9 @@ COPY packages/ui/package.json packages/ui/package.json
 RUN pnpm install --frozen-lockfile --filter @argus/ui...
 COPY packages/ui packages/ui
 ARG VITE_ARGUS_API_URL=http://localhost:8000
+ARG VITE_ARGUS_API_TOKEN=
 ENV VITE_ARGUS_API_URL=$VITE_ARGUS_API_URL
+ENV VITE_ARGUS_API_TOKEN=$VITE_ARGUS_API_TOKEN
 RUN pnpm --filter @argus/ui build
 
 FROM nginx:alpine

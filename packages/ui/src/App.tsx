@@ -2,12 +2,14 @@ import { DashboardPage } from "./DashboardPage";
 import HomePage from "./HomePage";
 import DashboardRunPage from "./DashboardRunPage";
 import ChatRunPage from "./ChatRunPage";
+import ReplayPage from "./ReplayPage";
 import "./styles/globals.css";
 
 export default function App() {
   const path = window.location.pathname;
 
   if (path === "/dashboard") return <DashboardPage />;
+  if (path === "/replay") return <ReplayPage />;
   const dashboardRun = path.match(/^\/app\/dashboard\/([^/]+)\/?$/);
   if (dashboardRun) return <DashboardRunPage id={decodeURIComponent(dashboardRun[1])} />;
   const chatRun = path.match(/^\/app\/chat\/([^/]+)\/?$/);

@@ -165,8 +165,9 @@ async def replay_finding(replay: Callable[[], Awaitable[bool]], attempts: int = 
     for _ in range(count):
         try:
             successes += bool(await replay())
-        except Exception:
-            logger.debug("Legacy evidence replay failed", exc_info=True)
+        except Exception as exc:  # noqa: BLE001 - a failed replay counts as a non-reproduction
+            logger.warning("Finding replay attempt failed: %s", exc)
+            continue
     return {
         "attempts": count,
         "successes": successes,

@@ -5,12 +5,22 @@ method returns the corresponding F-01 Pydantic contract so callers can validate
 boundaries without depending on a concrete implementation.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol, Sequence, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from argus_contracts.models import (
-    AppGraph, BugReport, ElementCatalogEntry, Evidence, Finding, GateResult,
-    RunEvent, Spec, TestCase, TestResult, VerificationResult,
+    AppGraph,
+    BugReport,
+    ElementCatalogEntry,
+    Evidence,
+    Finding,
+    GateResult,
+    RunEvent,
+    Spec,
+    TestCase,
+    TestResult,
+    VerificationResult,
 )
 
 

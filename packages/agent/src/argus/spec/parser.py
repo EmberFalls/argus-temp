@@ -1,5 +1,6 @@
-from argus.state.test_case import TestCase
 from argus_contracts.models import Spec
+
+from argus.state.test_case import TestCase
 
 
 def parse_spec(description: str) -> Spec:

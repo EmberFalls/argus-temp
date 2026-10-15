@@ -40,7 +40,7 @@ class RunArtifactLayout:
             "console": base / "console.json",
         }
 
-    def initialize(self) -> "RunArtifactLayout":
+    def initialize(self) -> RunArtifactLayout:
         for path in (self.run_dir, self.artifacts_dir, self.tests_dir, self.reports_dir):
             path.mkdir(parents=True, exist_ok=True)
         return self

@@ -6,9 +6,17 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from types import TracebackType
+from typing import Any, Literal, Self
 
-from playwright.async_api import Browser, BrowserContext, CDPSession, Page, Playwright, async_playwright
+from playwright.async_api import (
+    Browser,
+    BrowserContext,
+    CDPSession,
+    Page,
+    Playwright,
+    async_playwright,
+)
 
 BrowserTypeName = Literal["chromium", "firefox", "webkit"]
 DEFAULT_VIEWPORT = {"width": 1280, "height": 720}
@@ -23,7 +31,7 @@ class RecordingOptions:
     har: bool = False
 
     @classmethod
-    def from_value(cls, value: "RecordingOptions | dict[str, bool] | None") -> "RecordingOptions":
+    def from_value(cls, value: RecordingOptions | dict[str, bool] | None) -> RecordingOptions:
         if value is None:
             return cls()
         if isinstance(value, cls):
@@ -50,7 +58,7 @@ class BrowserSession:
     requests: list[dict[str, Any]] = field(default_factory=list)
     responses: list[dict[str, Any]] = field(default_factory=list)
     console: list[dict[str, Any]] = field(default_factory=list)
-    _factory: "BrowserSessionFactory | None" = field(default=None, repr=False)
+    _factory: BrowserSessionFactory | None = field(default=None, repr=False)
     _closed: bool = field(default=False, init=False, repr=False)
 
     @property
@@ -82,10 +90,15 @@ class BrowserSession:
                 if self._factory is not None:
                     self._factory._release(self)
 
-    async def __aenter__(self) -> "BrowserSession":
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         await self.close()
 
 
@@ -112,7 +125,7 @@ class BrowserSessionFactory:
         self._sessions: list[BrowserSession] = []
         self._closed = False
 
-    async def start(self) -> "BrowserSessionFactory":
+    async def start(self) -> BrowserSessionFactory:
         if self._closed:
             raise RuntimeError("This BrowserSessionFactory is closed")
         if self._playwright is None:
@@ -239,8 +252,13 @@ class BrowserSessionFactory:
             await self._playwright.stop()
             self._playwright = None
 
-    async def __aenter__(self) -> "BrowserSessionFactory":
+    async def __aenter__(self) -> Self:
         return await self.start()
 
-    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         await self.close()

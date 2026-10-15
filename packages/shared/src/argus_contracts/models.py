@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
+
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
@@ -179,7 +180,7 @@ RunEventType = Literal[
 class RunEvent(ContractModel):
     id: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
-    ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ts: datetime = Field(default_factory=lambda: datetime.now(UTC))
     agent: str = Field(min_length=1)
     correlation_id: str = Field(min_length=1)
     type: RunEventType

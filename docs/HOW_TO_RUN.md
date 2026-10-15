@@ -153,6 +153,30 @@ For the included sample app, start `docker compose up --build sample-app` in a t
 
 The frontend has both a simple run form at `/` and a sample dashboard at `/dashboard`. The dashboard currently displays fixture content; use the form to submit a real API run. You can instead start the sample app, API, and UI with `docker compose up --build`, then open `http://localhost:3000`; the UI form is configured to call the API on host port 8000.
 
+### Run API endpoints
+
+The API starts runs asynchronously and stores run metadata in `artifacts/runs.sqlite3`; detailed state, events, and evidence remain under `artifacts/runs/<run_id>/`. FastAPI serves its OpenAPI page at `http://localhost:8000/docs`.
+
+For a local fixture run, start the API as above and submit:
+
+```powershell
+curl.exe -X POST http://localhost:8000/runs?mode=fixture `
+  -H "Content-Type: application/json" `
+  -d '{"url":"http://localhost:3100","spec":"Exercise the sample app"}'
+```
+
+For a real browser run, omit `mode=fixture` and use the target URL and behavior in the JSON body. The response contains a `run_id` and `events_url`. Read the live event stream, list previous runs, and inspect one run with:
+
+```powershell
+curl.exe -N http://localhost:8000/runs/<run_id>/events
+curl.exe http://localhost:8000/runs
+curl.exe http://localhost:8000/runs/<run_id>
+```
+
+SSE event IDs are increasing sequence numbers. To resume after event 24, reconnect with `curl.exe -N -H "Last-Event-ID: 24" http://localhost:8000/runs/<run_id>/events`; the stream starts with event 25. Run details list artifact URLs, which can be fetched directly, for example `/runs/<run_id>/artifacts/reports/bug_reports.json`.
+
+Set `ARGUS_API_TOKEN` in the API process environment to protect run and artifact endpoints with `Authorization: Bearer <token>`. `/health` remains public. For local Vite development, set the same value as `VITE_ARGUS_API_TOKEN`; for Docker Compose, provide both variables in the repository-root `.env`. Vite embeds its token in browser code, so this setting is for a local single-tenant demo, not a production secret.
+
 ## Run checks
 
 ```sh

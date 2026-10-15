@@ -79,7 +79,7 @@ class ModelSettings:
     max_tokens_per_call: int = 8192
 
     @classmethod
-    def from_env(cls) -> "ModelSettings":
+    def from_env(cls) -> ModelSettings:
         routes: dict[ModelTier, ModelRoute] = {}
         for tier in TIERS:
             prefix = f"ARGUS_MODEL_{tier.upper()}_"

@@ -19,7 +19,6 @@ from argus.interfaces import (
     Tester,
 )
 
-
 RoleName = str
 ComponentFactory = Callable[[], Any]
 

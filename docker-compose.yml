@@ -17,6 +17,7 @@ services:
       dockerfile: packages/ui/Dockerfile
       args:
         VITE_ARGUS_API_URL: http://localhost:8000
+        VITE_ARGUS_API_TOKEN: ${VITE_ARGUS_API_TOKEN:-}
     ports:
       - "3000:80"
     depends_on:
@@ -29,6 +30,7 @@ services:
       - "8000:8000"
     environment:
       ARGUS_ARTIFACT_DIR: /data/artifacts
+      ARGUS_API_TOKEN: ${ARGUS_API_TOKEN:-}
     volumes:
       - argus-artifacts:/data/artifacts
 volumes:
