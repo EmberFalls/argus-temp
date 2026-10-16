@@ -9,13 +9,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
+
+import httpx
 
 try:
     from jsonschema import Draft202012Validator
@@ -77,9 +78,13 @@ class ModelSettings:
     max_calls_per_run: int = 100
     max_tokens_per_run: int = 100_000
     max_tokens_per_call: int = 8192
+    request_timeout_seconds: float = 60.0
 
     @classmethod
     def from_env(cls) -> ModelSettings:
+        import argus.config  # noqa: F401 - ensure environment is loaded
+        from dotenv import load_dotenv
+        load_dotenv()
         routes: dict[ModelTier, ModelRoute] = {}
         for tier in TIERS:
             prefix = f"ARGUS_MODEL_{tier.upper()}_"
@@ -99,6 +104,7 @@ class ModelSettings:
             max_calls_per_run=int(os.getenv("ARGUS_MODEL_MAX_CALLS", "100")),
             max_tokens_per_run=int(os.getenv("ARGUS_MODEL_MAX_TOKENS", "100000")),
             max_tokens_per_call=int(os.getenv("ARGUS_MODEL_MAX_TOKENS_PER_CALL", "8192")),
+            request_timeout_seconds=float(os.getenv("ARGUS_MODEL_TIMEOUT_SECONDS", "60")),
         )
 
     def validate(self) -> None:
@@ -113,6 +119,8 @@ class ModelSettings:
             )
         if self.requests_per_minute < 1 or self.max_calls_per_run < 1 or self.max_tokens_per_run < 1:
             raise ModelConfigurationError("Rate and run budgets must be positive integers.")
+        if self.request_timeout_seconds <= 0:
+            raise ModelConfigurationError("Model request timeout must be positive.")
 
 
 @dataclass
@@ -215,38 +223,100 @@ class OpenAICompatibleProvider:
     """Small stdlib adapter; model/provider changes are configuration-only."""
 
     async def generate(self, *, route: ModelRoute, system: str, prompt: Prompt,
-                       schema: dict[str, Any], max_tokens: int) -> tuple[Any, int]:
+                       schema: dict[str, Any], max_tokens: int,
+                       timeout_seconds: float = 60.0) -> tuple[Any, int]:
         if not route.configured:
             raise ModelConfigurationError("Model route is unconfigured; set its NAME and BASE_URL environment variables.")
-        return await asyncio.to_thread(self._generate_sync, route, system, prompt, schema, max_tokens)
-
-    @staticmethod
-    def _generate_sync(route: ModelRoute, system: str, prompt: Prompt,
-                       schema: dict[str, Any], max_tokens: int) -> tuple[Any, int]:
         url = route.base_url.rstrip("/")
         if not url.endswith("/chat/completions"):
             url += "/chat/completions"
-        body = json.dumps({
+        body: dict[str, Any] = {
             "model": route.model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
             "temperature": 0,
             "max_tokens": max_tokens,
+            # strict=True plus the full contract schema routinely stalls OpenRouter
+            # and Gemini-compatible endpoints for minutes. Local jsonschema
+            # validation in ModelGateway still fail-closes on malformed output.
             "response_format": {"type": "json_schema", "json_schema": {
-                "name": schema.get("title", "argus_response"), "strict": True, "schema": schema,
+                "name": schema.get("title", "argus_response"), "strict": False, "schema": schema,
             }},
-        }).encode("utf-8")
+            # Keep reasoning models bounded so they don't consume all max_tokens on internal CoT
+            "reasoning": {"effort": "low"},
+        }
         headers = {"Content-Type": "application/json"}
         if route.api_key:
             headers["Authorization"] = f"Bearer {route.api_key}"
-        request = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"Model provider request failed: {exc}") from exc
+
+        max_http_attempts = 3
+        data: dict[str, Any] | None = None
+        for attempt_idx in range(max_http_attempts):
+            try:
+                # The outer deadline is a wall-clock limit; HTTP client read timeouts
+                # alone can be extended indefinitely by a slow trickle of bytes.
+                async with asyncio.timeout(timeout_seconds):
+                    async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(
+                            timeout_seconds,
+                            connect=min(10.0, timeout_seconds),
+                        )
+                    ) as client:
+                        response = await client.post(url, json=body, headers=headers)
+                        response.raise_for_status()
+                        data = response.json()
+                        break
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429 and attempt_idx < max_http_attempts - 1:
+                    retry_after = exc.response.headers.get("Retry-After")
+                    try:
+                        delay = float(retry_after) if retry_after else float(2 * (attempt_idx + 1))
+                    except ValueError:
+                        delay = float(2 * (attempt_idx + 1))
+                    delay = min(delay, 15.0)
+                    logging.getLogger(__name__).warning(
+                        "Model provider returned HTTP 429; retrying in %.1fs (attempt %d/%d)",
+                        delay, attempt_idx + 1, max_http_attempts,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                if exc.response.status_code == 429:
+                    retry_after = exc.response.headers.get("Retry-After")
+                    suffix = f" Retry-After: {retry_after} seconds." if retry_after else ""
+                    raise RuntimeError(
+                        "Model provider rate-limited this request (HTTP 429). Check the account quota, "
+                        f"rate limit, and model access.{suffix}"
+                    ) from exc
+                raise RuntimeError(
+                    f"Model provider returned HTTP {exc.response.status_code}."
+                ) from exc
+            except TimeoutError as exc:
+                raise RuntimeError(
+                    f"Model provider request exceeded its {timeout_seconds:g}s deadline."
+                ) from exc
+            except httpx.RequestError as exc:
+                raise RuntimeError(f"Model provider request failed: {exc}") from exc
+            except json.JSONDecodeError as exc:
+                raise MalformedModelResponse("Provider returned an invalid JSON response body.") from exc
+
+        if data is None:
+            raise RuntimeError("Model provider returned no response data.")
+
         try:
             content = data["choices"][0]["message"]["content"]
-            value = json.loads(content) if isinstance(content, str) else content
+            if content is None:
+                raise MalformedModelResponse("Provider returned null content; token limit may have been exhausted by model reasoning.")
+            if isinstance(content, str):
+                cleaned = content.strip()
+                if cleaned.startswith("```"):
+                    lines = cleaned.splitlines()
+                    if lines and lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    cleaned = "\n".join(lines).strip()
+                value = json.loads(cleaned)
+            else:
+                value = content
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise MalformedModelResponse("Provider returned no valid JSON response content.") from exc
         usage = data.get("usage", {})
@@ -287,10 +357,14 @@ class ModelGateway:
             try:
                 await self.rate_limiter.acquire()
                 raw, tokens = await self.provider.generate(route=route, system=system, prompt=prompt,
-                                                           schema=schema, max_tokens=token_cap)
+                                                           schema=schema, max_tokens=token_cap,
+                                                           timeout_seconds=self.settings.request_timeout_seconds)
             except MalformedModelResponse:
                 await self.budget.reconcile(run_id, token_cap, 0)
                 if attempt == 0:
+                    logging.getLogger(__name__).warning(
+                        "Malformed response from model tier %s; retrying once with the same schema.", tier,
+                    )
                     continue
                 raise
             except Exception:
@@ -301,6 +375,9 @@ class ModelGateway:
             except MalformedModelResponse:
                 await self.budget.reconcile(run_id, token_cap, tokens)
                 if attempt == 0:
+                    logging.getLogger(__name__).warning(
+                        "Model output for tier %s failed schema validation; retrying once.", tier,
+                    )
                     continue
                 raise
             except Exception:

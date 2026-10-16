@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,7 @@ def _gateway(tmp_path: Path, provider: FakeProvider, mode: str = "live") -> Mode
     routes = {tier: ModelRoute("test", f"{tier}-model", "https://unused.invalid") for tier in TIERS}
     settings = ModelSettings(
         routes=routes, mode=mode, cassette_dir=tmp_path,
-        max_tokens_per_call=2048, max_tokens_per_run=10000,
+        max_tokens_per_call=4096, max_tokens_per_run=10000,
     )
     return ModelGateway(settings, provider=provider)
 
@@ -94,7 +95,10 @@ def test_conduit_spec_has_six_journeys_stable_claim_links_and_cassette_replay(tm
         assert parsed.journeys[1].claim_ids == [claim.id]
         assert parsed.description == description
         assert "Visitors can browse the public feed." in provider.requests[0]["prompt"]
-        assert provider.requests[0]["schema"]["properties"]["journeys"]["minItems"] == 6
+        schema = provider.requests[0]["schema"]
+        assert schema["properties"]["journeys"]["minItems"] == 6
+        assert "assert_idor_isolation" not in json.dumps(schema)
+        assert provider.requests[0]["max_tokens"] == 3500
         assert provider.calls == 1
 
         replay_provider = FakeProvider([])

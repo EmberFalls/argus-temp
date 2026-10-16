@@ -54,7 +54,7 @@ async def run_qa(target_url: str, spec: str, journeys: list[TestCase] | None = N
         page = exploration_session.page
         capture = None
         if on_screencast_frame is not None and cdp_session is not None:
-            capture = CdpScreencastCapture(cdp_session, on_screencast_frame)
+            capture = CdpScreencastCapture(cdp_session, on_screencast_frame, page=page)
             await capture.start()
         try:
             await page.goto(target_url, wait_until="domcontentloaded", timeout=30000)
@@ -144,7 +144,9 @@ async def run_qa(target_url: str, spec: str, journeys: list[TestCase] | None = N
                 )
                 case_capture = None
                 if on_screencast_frame is not None and case_cdp is not None:
-                    case_capture = CdpScreencastCapture(case_cdp, on_screencast_frame)
+                    case_capture = CdpScreencastCapture(
+                        case_cdp, on_screencast_frame, page=case_session.page,
+                    )
                     await case_capture.start()
                 try:
                     verdict, evidence, duration = await execute_case(

@@ -51,6 +51,35 @@ async def test_screencast_frames_do_not_mutate_page_dom_or_animations(tmp_path):
     assert after == before
 
 
+async def test_screencast_falls_back_to_screenshots_when_cdp_is_silent(tmp_path):
+    class SilentCdp:
+        async def send(self, method, params=None):
+            del method, params
+            return {}
+
+        def on(self, event, handler):
+            del event, handler
+
+        def remove_listener(self, event, handler):
+            del event, handler
+
+    async with BrowserSessionFactory(artifact_dir=tmp_path) as factory:
+        session, _ = await factory.new_context("chromium")
+        await session.page.set_content("<!doctype html><title>Fallback</title><h1>Visible</h1>")
+        frames: list[dict] = []
+        capture = CdpScreencastCapture(SilentCdp(), frames.append, page=session.page)
+        try:
+            await capture.start()
+            await session.page.wait_for_timeout(1600)
+        finally:
+            await capture.stop()
+        await session.close()
+
+    assert frames
+    assert frames[0]["metadata"]["source"] == "screenshot"
+    assert base64.b64decode(frames[0]["data"]).startswith(b"\xff\xd8")
+
+
 async def test_tester_emits_action_target_and_rationale_for_overlay(tmp_path):
     async with BrowserSessionFactory(artifact_dir=tmp_path / "browser") as factory:
         session, _ = await factory.new_context("chromium")

@@ -16,6 +16,7 @@ from playwright.async_api import BrowserContext, Page, Route
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
+from argus.browser.screencast import CdpScreencastCapture
 from argus.browser.session import BrowserSessionFactory
 from argus.config import settings
 from argus.perception.a11y import (
@@ -86,6 +87,8 @@ class DeterministicCrawler:
         navigation_guard: NavigationGuard | None = None,
         auth_bootstrap: AuthBootstrap | None = None,
         timeout_ms: int = 8000,
+        on_screencast_frame: Callable[[dict[str, Any]], None] | None = None,
+        on_action: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         if max_pages < 1 or max_steps < 1:
             raise ValueError("max_pages and max_steps must be at least 1")
@@ -98,6 +101,8 @@ class DeterministicCrawler:
         self.navigation_guard = navigation_guard or _default_navigation_guard
         self.auth_bootstrap = auth_bootstrap
         self.timeout_ms = timeout_ms
+        self.on_screencast_frame = on_screencast_frame
+        self.on_action = on_action
         self._graph = AppGraph()
         self._step_count = 0
         self._origin_url = ""
@@ -200,10 +205,16 @@ class DeterministicCrawler:
         authenticated: bool,
         storage_state: dict[str, Any] | None = None,
     ) -> None:
-        session, _ = await factory.new_context(
+        session, cdp_session = await factory.new_context(
             self.browser_type, storage_state=storage_state
         )
+        capture = None
         try:
+            if self.on_screencast_frame is not None and cdp_session is not None:
+                capture = CdpScreencastCapture(
+                    cdp_session, self.on_screencast_frame, page=session.page,
+                )
+                await capture.start()
             await self._install_navigation_guard(session.context)
             page = session.page
             queue: deque[str] = deque([_canonical_url(start_url)])
@@ -246,6 +257,8 @@ class DeterministicCrawler:
                         page, node, authenticated, visited_states, queue, visited_urls
                     )
         finally:
+            if capture is not None:
+                await capture.stop()
             await session.close()
 
     async def _install_navigation_guard(self, context: BrowserContext) -> None:
@@ -356,6 +369,24 @@ class DeterministicCrawler:
                 continue
             self._step_count += 1
             source_url = page.url
+            if self.on_action is not None:
+                try:
+                    box = await locator.first.bounding_box()
+                    viewport = await page.evaluate("() => ({width: innerWidth, height: innerHeight})")
+                    if box is not None:
+                        self.on_action({
+                            "action": "click",
+                            "locator": control.semantic_locator,
+                            "rationale": f"Explore {label} to discover new application states.",
+                            "x": box["x"] + box["width"] / 2,
+                            "y": box["y"] + box["height"] / 2,
+                            "width": box["width"],
+                            "height": box["height"],
+                            "viewport_width": viewport["width"],
+                            "viewport_height": viewport["height"],
+                        })
+                except PlaywrightError:
+                    pass
             try:
                 await locator.click(timeout=min(self.timeout_ms, 2500))
                 await page.wait_for_timeout(100)
@@ -453,6 +484,8 @@ async def crawl_app(
     max_steps: int = 500,
     navigation_guard: NavigationGuard | None = None,
     browser_type: str | None = None,
+    on_screencast_frame: Callable[[dict[str, Any]], None] | None = None,
+    on_action: Callable[[dict[str, Any]], None] | None = None,
 ) -> AppGraph:
     """Convenience entry point using the configured browser and crawl limits."""
     crawler = DeterministicCrawler(
@@ -461,5 +494,7 @@ async def crawl_app(
         navigation_guard=navigation_guard,
         auth_bootstrap=auth_bootstrap,
         browser_type=browser_type or settings.browser,
+        on_screencast_frame=on_screencast_frame,
+        on_action=on_action,
     )
     return await crawler.crawl(start_url, output_path)
