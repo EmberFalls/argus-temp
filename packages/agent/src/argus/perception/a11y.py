@@ -97,6 +97,17 @@ _CONTROL_METADATA_SCRIPT = r"""(elements, injectedSelector) => {
     const form = el.closest('form');
     const state = {};
     if ('disabled' in el) state.disabled = !!el.disabled;
+    if (el instanceof HTMLInputElement) state.field_type = (el.type || 'text').toLowerCase();
+    else if (el instanceof HTMLTextAreaElement) state.field_type = 'textarea';
+    else if (el instanceof HTMLSelectElement) state.field_type = 'select';
+    if (el.hasAttribute('maxlength')) state.max_length = Number(el.getAttribute('maxlength'));
+    if (el.hasAttribute('min')) state.min_value = el.getAttribute('min');
+    if (el.hasAttribute('max')) state.max_value = el.getAttribute('max');
+    if (el.hasAttribute('step')) state.step_value = el.getAttribute('step');
+    const columnHeader = el.closest('th, [role=columnheader]');
+    if (columnHeader && (el.matches('button, a, [role=button], [role=link]') || el === columnHeader)) {
+      state.sort_control = true;
+    }
     if ('checked' in el && ['checkbox', 'radio'].includes((el.type || '').toLowerCase())) state.checked = !!el.checked;
     for (const [attr, key] of [['aria-expanded', 'expanded'], ['aria-pressed', 'pressed'], ['aria-selected', 'selected']]) {
       if (el.hasAttribute(attr)) state[key] = el.getAttribute(attr) === 'true';

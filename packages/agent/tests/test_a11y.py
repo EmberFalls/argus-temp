@@ -20,7 +20,9 @@ async def test_catalog_is_complete_stable_and_filters_argus_overlay(tmp_path: Pa
     <html><head><title>Catalog fixture</title></head><body>
       <a href="/home">Home</a>
       <form aria-label="Account">
-        <label for="email">Email</label><input id="email" type="email">
+        <label for="email">Email</label><input id="email" type="email" required>
+        <label for="note">Note</label><textarea id="note" maxlength="256"></textarea>
+        <label for="quantity">Quantity</label><input id="quantity" type="number" min="0" max="100" step="1">
         <button type="submit">Search</button>
       </form>
       <p aria-live="polite"><span id="count">4</span> results</p>
@@ -34,10 +36,16 @@ async def test_catalog_is_complete_stable_and_filters_argus_overlay(tmp_path: Pa
             first = await inspect_page(session.page, "http://fixture.local/home")
             assert first["title"] == "Catalog fixture"
             assert first["strict_mode_total"] == len(first["elements"])
-            assert first["visible_strict_mode_resolved"] == 5
+            assert first["visible_strict_mode_resolved"] == 7
             assert first["visible_strict_mode_resolution_rate"] == 1.0
             assert first["accessibility_snapshot"].count('button "Save"') == 2
             assert all(item["name"] != "Agent overlay" for item in first["elements"])
+            email = next(item for item in first["elements"] if item["name"] == "Email")
+            note = next(item for item in first["elements"] if item["name"] == "Note")
+            quantity = next(item for item in first["elements"] if item["name"] == "Quantity")
+            assert email["state"]["field_type"] == "email" and email["state"]["required"] is True
+            assert note["state"]["max_length"] == 256
+            assert quantity["role"] == "spinbutton" and quantity["state"]["max_value"] == "100"
             assert (
                 await session.page.locator("[data-argus-agent]").get_attribute(
                     "aria-hidden"
