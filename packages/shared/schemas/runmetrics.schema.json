@@ -18,6 +18,12 @@
       "minimum": 0,
       "title": "Failed",
       "type": "integer"
+    },
+    "raw_findings": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Raw Findings",
+      "type": "integer"
     }
   },
   "title": "RunMetrics",

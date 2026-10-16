@@ -234,6 +234,7 @@ export interface RunMetrics {
   "journeys"?: number;
   "passed"?: number;
   "failed"?: number;
+  "raw_findings"?: number;
 }
 
 export interface RunSummary {
@@ -246,5 +247,6 @@ export interface RunSummary {
   "discovered_elements"?: Array<ElementCatalogEntry>;
   "test_cases"?: Array<TestCase>;
   "test_results"?: Array<TestResult>;
+  "findings"?: Array<Finding>;
   "metrics"?: RunMetrics;
 }

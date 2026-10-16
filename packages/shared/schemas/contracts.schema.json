@@ -1515,6 +1515,12 @@
           "minimum": 0,
           "title": "Failed",
           "type": "integer"
+        },
+        "raw_findings": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Raw Findings",
+          "type": "integer"
         }
       },
       "title": "RunMetrics",
@@ -1579,6 +1585,13 @@
             "$ref": "#/$defs/TestResult"
           },
           "title": "Test Results",
+          "type": "array"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
           "type": "array"
         },
         "metrics": {

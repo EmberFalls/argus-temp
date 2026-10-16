@@ -129,6 +129,8 @@ class EvidenceRecorder:
         self.page.on("response", self._on_response)
         self.page.on("requestfailed", self._on_request_failed)
         self.page.on("console", self._on_console)
+        self.page.on("pageerror", self._on_page_error)
+        self.page.on("dialog", self._on_dialog)
 
     @staticmethod
     def _now() -> str:
@@ -178,6 +180,22 @@ class EvidenceRecorder:
         self.console.append(ConsoleEvent(
             level=level,
             message=self.redactor.redact_text(message.text) or "",
+            timestamp=self._now(),
+            step_index=self.current_step_index,
+        ))
+
+    def _on_page_error(self, error: Any) -> None:
+        self.console.append(ConsoleEvent(
+            level="error",
+            message=self.redactor.redact_text(str(error)) or "Uncaught page error",
+            timestamp=self._now(),
+            step_index=self.current_step_index,
+        ))
+
+    def _on_dialog(self, dialog: Any) -> None:
+        self.console.append(ConsoleEvent(
+            level="error",
+            message=self.redactor.redact_text(f"JavaScript dialog: {dialog.type}") or "JavaScript dialog",
             timestamp=self._now(),
             step_index=self.current_step_index,
         ))

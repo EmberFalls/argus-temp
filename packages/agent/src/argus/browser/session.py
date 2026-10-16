@@ -232,6 +232,17 @@ class BrowserSessionFactory:
         page.on("console", lambda message: session.console.append({
             "type": message.type, "text": message.text, "location": message.location,
         }))
+        page.on("pageerror", lambda error: session.console.append({
+            "type": "error", "text": str(error), "source": "pageerror",
+        }))
+
+        def dismiss_dialog(dialog) -> None:
+            session.console.append({
+                "type": "error", "text": f"JavaScript dialog: {dialog.type}", "source": "dialog",
+            })
+            asyncio.create_task(dialog.dismiss())
+
+        page.on("dialog", dismiss_dialog)
 
     def _release(self, session: BrowserSession) -> None:
         if session in self._sessions:

@@ -9,6 +9,7 @@ from uuid import uuid4
 from argus_contracts.artifacts import RunArtifactLayout
 from argus_contracts.models import (
     Evidence,
+    Finding,
     RunEvent,
     RunMetrics,
     RunSummary,
@@ -23,6 +24,8 @@ from argus.browser.screencast import CdpScreencastCapture
 from argus.browser.session import BrowserSessionFactory
 from argus.config import settings
 from argus.models import ModelGateway
+from argus.oracles import Execution
+from argus.oracles import evaluate as evaluate_oracles
 from argus.perception.a11y import resolve_semantic_locator
 from argus.spec.binder import bind_cases
 from argus.spec.data_factory import TestDataFactory
@@ -122,6 +125,7 @@ async def run_qa(target_url: str, spec: str, journeys: list[TestCase] | None = N
 
         async def execute_binding(binding):
             case = binding.test_case
+            case_findings: list[Finding] = []
             if binding.verdict == "INCONCLUSIVE":
                 result = TestResult(
                     test_id=case.id,
@@ -153,28 +157,47 @@ async def run_qa(target_url: str, spec: str, journeys: list[TestCase] | None = N
                     await case_session.close()
                 result = TestResult(test_id=case.id, verdict=verdict,
                                     evidence=evidence, duration_ms=duration)
+            case_findings = evaluate_oracles(Execution(
+                test_case=case,
+                result=result,
+                target_url=target_url,
+            ))
+            for finding in case_findings:
+                layout.append_event(RunEvent(
+                    id=uuid4().hex,
+                    run_id=run_id,
+                    agent="oracle",
+                    correlation_id=case.id,
+                    type="finding_created",
+                    payload=finding.model_dump(mode="json"),
+                ))
             layout.append_event(RunEvent(id=uuid4().hex, run_id=run_id, agent="tester",
                                          correlation_id=case.id, type="test_result",
                                          payload={"test_id": case.id, "verdict": verdict,
-                                                  "duration_ms": duration}))
-            return result
+                                                  "duration_ms": duration,
+                                                  "finding_count": len(case_findings)}))
+            return result, case_findings
 
         # BrowserSessionFactory bounds active contexts; gather uses the pool while
         # keeping each test case in its own browser context.
-        results = await asyncio.gather(*(execute_binding(binding) for binding in bindings))
+        completed = await asyncio.gather(*(execute_binding(binding) for binding in bindings))
+        results = [result for result, _ in completed]
+        findings = [finding for _, case_findings in completed for finding in case_findings]
     summary = RunSummary(
         run_id=run_id, artifact_dir=str(layout.run_dir), target_url=target_url,
         spec=spec, parsed_spec=parsed_spec, test_cases=candidate_cases,
         accessibility_snapshot=snapshot,
         discovered_elements=inventory, test_results=results,
+        findings=findings,
         metrics=RunMetrics(journeys=len(results),
                            passed=sum(r.verdict == "PASS" for r in results),
-                           failed=sum(r.verdict == "FAIL" for r in results)),
+                           failed=sum(r.verdict == "FAIL" for r in results),
+                           raw_findings=len(findings)),
     )
     result = summary.model_dump(mode="json")
     layout.write_state(result)
     layout.append_event(RunEvent(id=uuid4().hex, run_id=run_id, agent="supervisor",
                                  correlation_id=run_id, type="run_completed",
-                                 payload={"status": "completed", "finding_count": 0,
+                                 payload={"status": "completed", "finding_count": len(findings),
                                           "artifact_dir": str(layout.run_dir)}))
     return result
