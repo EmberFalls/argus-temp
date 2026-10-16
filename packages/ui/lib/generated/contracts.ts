@@ -4,6 +4,7 @@ export interface SpecClaim {
   "id": string;
   "statement": string;
   "priority"?: "critical" | "high" | "normal" | "low";
+  "journey_ids"?: Array<string>;
 }
 
 export interface SpecEntity {
@@ -31,6 +32,7 @@ export interface TestCase {
   "description": string;
   "steps"?: Array<Step>;
   "expected"?: string;
+  "claim_ids"?: Array<string>;
   "category"?: "journey" | "edge_case";
   "source"?: "spec" | "playbook";
 }

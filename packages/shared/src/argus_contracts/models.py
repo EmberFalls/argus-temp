@@ -23,6 +23,7 @@ class TestCase(ContractModel):
     description: str = Field(min_length=1)
     steps: list[Step] = Field(default_factory=list)
     expected: str = ""
+    claim_ids: list[str] = Field(default_factory=list)
     category: Literal["journey", "edge_case"] = "journey"
     source: Literal["spec", "playbook"] = "spec"
 
@@ -31,6 +32,7 @@ class SpecClaim(ContractModel):
     id: str = Field(min_length=1)
     statement: str = Field(min_length=1)
     priority: Literal["critical", "high", "normal", "low"] = "normal"
+    journey_ids: list[str] = Field(default_factory=list)
 
 
 class SpecEntity(ContractModel):

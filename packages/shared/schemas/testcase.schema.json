@@ -76,6 +76,13 @@
       "title": "Expected",
       "type": "string"
     },
+    "claim_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Claim Ids",
+      "type": "array"
+    },
     "category": {
       "default": "journey",
       "enum": [

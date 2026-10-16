@@ -21,6 +21,13 @@
       ],
       "title": "Priority",
       "type": "string"
+    },
+    "journey_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Journey Ids",
+      "type": "array"
     }
   },
   "required": [

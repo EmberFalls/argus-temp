@@ -23,6 +23,13 @@
           ],
           "title": "Priority",
           "type": "string"
+        },
+        "journey_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Journey Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -134,6 +141,13 @@
           "default": "",
           "title": "Expected",
           "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
         },
         "category": {
           "default": "journey",
