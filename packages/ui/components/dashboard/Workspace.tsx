@@ -80,7 +80,6 @@ export function Workspace() {
   const [selectedFinding, setSelectedFinding] = useState<Finding>(emptyFinding);
   const [url, setUrl] = useState("");
   const [spec, setSpec] = useState("");
-  const [sources, setSources] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
@@ -201,10 +200,6 @@ export function Workspace() {
       setSelectedFinding(bugs.length ? asFinding(bugs[0]) : emptyFinding);
       setScreen(detail.status === "running" || detail.status === "queued" ? "running" : "results");
     } catch (error) { setApiError(error instanceof Error ? error.message : "Unable to load this run."); }
-  }
-
-  function toggleSource(source: string) {
-    setSources((current) => current.includes(source) ? current.filter((item) => item !== source) : [...current, source]);
   }
 
   function handleSplitKey(event: React.KeyboardEvent<HTMLDivElement>, axis: Divider) {
