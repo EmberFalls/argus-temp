@@ -1,6 +1,6 @@
 export type Finding = {
   id: string;
-  severity: "P1" | "P2" | "P3";
+  severity: "P0" | "P1" | "P2" | "P3";
   title: string;
   status: "verified" | "pending" | "rejected";
   time: string;
