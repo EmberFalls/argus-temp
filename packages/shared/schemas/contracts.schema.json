@@ -249,7 +249,7 @@
           "title": "Value"
         },
         "timeout_ms": {
-          "default": 5000,
+          "default": 10000,
           "exclusiveMinimum": 0,
           "maximum": 120000,
           "title": "Timeout Ms",
@@ -696,6 +696,19 @@
           ],
           "default": null,
           "title": "Timestamp"
+        },
+        "step_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Index"
         }
       },
       "required": [
@@ -814,6 +827,37 @@
           "default": "",
           "title": "Actual",
           "type": "string"
+        },
+        "failure_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "assertion",
+                "interaction",
+                "timeout",
+                "setup"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Kind"
+        },
+        "failed_step_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Step Index"
         },
         "network": {
           "items": {
@@ -1505,11 +1549,29 @@
           "title": "Accessibility Snapshot",
           "type": "string"
         },
+        "parsed_spec": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "discovered_elements": {
           "items": {
             "$ref": "#/$defs/ElementCatalogEntry"
           },
           "title": "Discovered Elements",
+          "type": "array"
+        },
+        "test_cases": {
+          "items": {
+            "$ref": "#/$defs/TestCase"
+          },
+          "title": "Test Cases",
           "type": "array"
         },
         "test_results": {

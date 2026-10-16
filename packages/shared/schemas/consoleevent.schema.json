@@ -26,6 +26,19 @@
       ],
       "default": null,
       "title": "Timestamp"
+    },
+    "step_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Step Index"
     }
   },
   "required": [

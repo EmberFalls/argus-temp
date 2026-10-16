@@ -103,6 +103,7 @@ export interface ConsoleEvent {
   "level": "debug" | "info" | "warning" | "error";
   "message": string;
   "timestamp"?: string | null;
+  "step_index"?: number | null;
 }
 
 export interface ReproductionResult {
@@ -123,6 +124,8 @@ export interface Evidence {
   "steps"?: Array<Step>;
   "expected"?: string;
   "actual"?: string;
+  "failure_kind"?: "assertion" | "interaction" | "timeout" | "setup" | null;
+  "failed_step_index"?: number | null;
   "network"?: Array<NetworkEvent>;
   "console"?: Array<ConsoleEvent>;
   "screenshots"?: Array<string>;
@@ -239,7 +242,9 @@ export interface RunSummary {
   "target_url": string;
   "spec": string;
   "accessibility_snapshot"?: string;
+  "parsed_spec"?: Spec | null;
   "discovered_elements"?: Array<ElementCatalogEntry>;
+  "test_cases"?: Array<TestCase>;
   "test_results"?: Array<TestResult>;
   "metrics"?: RunMetrics;
 }

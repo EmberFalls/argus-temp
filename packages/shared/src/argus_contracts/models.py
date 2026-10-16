@@ -25,7 +25,7 @@ class Step(ContractModel):
     ]
     locator: str = ""
     value: str | None = None
-    timeout_ms: int = Field(default=5000, gt=0, le=120000)
+    timeout_ms: int = Field(default=10000, gt=0, le=120000)
 
 
 class TestCase(ContractModel):
@@ -131,6 +131,7 @@ class ConsoleEvent(ContractModel):
     level: Literal["debug", "info", "warning", "error"]
     message: str
     timestamp: str | None = None
+    step_index: int | None = Field(default=None, ge=0)
 
 
 class ReproductionResult(ContractModel):
@@ -153,6 +154,8 @@ class Evidence(ContractModel):
     steps: list[Step] = Field(default_factory=list)
     expected: str = ""
     actual: str = ""
+    failure_kind: Literal["assertion", "interaction", "timeout", "setup"] | None = None
+    failed_step_index: int | None = Field(default=None, ge=0)
     network: list[NetworkEvent] = Field(default_factory=list)
     console: list[ConsoleEvent] = Field(default_factory=list)
     screenshots: list[str] = Field(default_factory=list)
@@ -279,6 +282,8 @@ class RunSummary(ContractModel):
     target_url: HttpUrl
     spec: str
     accessibility_snapshot: str = ""
+    parsed_spec: Spec | None = None
     discovered_elements: list[ElementCatalogEntry] = Field(default_factory=list)
+    test_cases: list[TestCase] = Field(default_factory=list)
     test_results: list[TestResult] = Field(default_factory=list)
     metrics: RunMetrics = Field(default_factory=RunMetrics)

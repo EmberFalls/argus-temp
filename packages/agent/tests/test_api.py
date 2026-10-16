@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from argus import api
 from argus.api import RunService
 from argus.run_store import RunStore
+from argus_contracts.models import Spec
 from fastapi.testclient import TestClient
 
 
@@ -77,6 +78,13 @@ def test_real_run_start_and_api_token_protection(tmp_path, monkeypatch):
     _configure_api(monkeypatch, tmp_path, token="local-test-token")
     monkeypatch.setenv("ARGUS_API_TOKEN", "local-test-token")
 
+    async def parse_spec_without_provider(description: str, **_kwargs) -> Spec:
+        # This API integration test covers browser/API behavior, not model-provider
+        # configuration. Keep the parser deterministic so CI needs no credentials.
+        return Spec(description=description)
+
+    monkeypatch.setattr("argus.supervisor.loop.parse_spec", parse_spec_without_provider)
+
     class TargetHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             body = b"<!doctype html><title>API target</title><h1>Target ready</h1><button>Continue</button>"
@@ -105,20 +113,20 @@ def test_real_run_start_and_api_token_protection(tmp_path, monkeypatch):
             run_id = response.json()["run_id"]
             events = client.get(f"/runs/{run_id}/events", headers=headers)
             frames = _sse_frames(events.text)
-            assert [sequence for sequence, _ in frames] == [0, 1, 2, 3]
-            assert [event["type"] for _, event in frames] == [
-                "run_started",
-                "action",
-                "page_discovered",
-                "run_completed",
-            ]
+            assert [sequence for sequence, _ in frames] == list(range(len(frames)))
+            event_types = [event["type"] for _, event in frames]
+            assert event_types[:3] == ["run_started", "action", "page_discovered"]
+            assert event_types[-1] == "run_completed"
+            assert "error" not in event_types
             assert frames[1][1]["payload"]["action"] == "inspect"
             assert frames[1][1]["payload"]["rationale"]
             resumed = client.get(
                 f"/runs/{run_id}/events",
                 headers={**headers, "Last-Event-ID": "0"},
             )
-            assert [sequence for sequence, _ in _sse_frames(resumed.text)] == [1, 2, 3]
+            assert [sequence for sequence, _ in _sse_frames(resumed.text)] == list(
+                range(1, len(frames))
+            )
             detail = client.get(f"/runs/{run_id}", headers=headers).json()
             assert detail["status"] == "completed"
             assert detail["summary"]["accessibility_snapshot"]

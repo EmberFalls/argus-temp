@@ -28,6 +28,19 @@
           ],
           "default": null,
           "title": "Timestamp"
+        },
+        "step_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Index"
         }
       },
       "required": [
@@ -132,6 +145,37 @@
           "default": "",
           "title": "Actual",
           "type": "string"
+        },
+        "failure_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "assertion",
+                "interaction",
+                "timeout",
+                "setup"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Kind"
+        },
+        "failed_step_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Step Index"
         },
         "network": {
           "items": {
@@ -334,6 +378,122 @@
       "title": "RunMetrics",
       "type": "object"
     },
+    "Spec": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "journeys": {
+          "items": {
+            "$ref": "#/$defs/TestCase"
+          },
+          "title": "Journeys",
+          "type": "array"
+        },
+        "claims": {
+          "items": {
+            "$ref": "#/$defs/SpecClaim"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "entities": {
+          "items": {
+            "$ref": "#/$defs/SpecEntity"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "validation_rules": {
+          "items": {
+            "$ref": "#/$defs/ValidationRule"
+          },
+          "title": "Validation Rules",
+          "type": "array"
+        },
+        "auth_requirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Auth Requirements",
+          "type": "array"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "title": "Spec",
+      "type": "object"
+    },
+    "SpecClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "statement": {
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        },
+        "priority": {
+          "default": "normal",
+          "enum": [
+            "critical",
+            "high",
+            "normal",
+            "low"
+          ],
+          "title": "Priority",
+          "type": "string"
+        },
+        "journey_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Journey Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "statement"
+      ],
+      "title": "SpecClaim",
+      "type": "object"
+    },
+    "SpecEntity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecEntity",
+      "type": "object"
+    },
     "Step": {
       "additionalProperties": false,
       "properties": {
@@ -398,7 +558,7 @@
           "title": "Value"
         },
         "timeout_ms": {
-          "default": 5000,
+          "default": 10000,
           "exclusiveMinimum": 0,
           "maximum": 120000,
           "title": "Timeout Ms",
@@ -463,6 +623,70 @@
       "title": "StepEvidence",
       "type": "object"
     },
+    "TestCase": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "journey": {
+          "minLength": 1,
+          "title": "Journey",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "expected": {
+          "default": "",
+          "title": "Expected",
+          "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "category": {
+          "default": "journey",
+          "enum": [
+            "journey",
+            "edge_case"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "source": {
+          "default": "spec",
+          "enum": [
+            "spec",
+            "playbook"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "journey",
+        "description"
+      ],
+      "title": "TestCase",
+      "type": "object"
+    },
     "TestResult": {
       "additionalProperties": false,
       "properties": {
@@ -497,6 +721,39 @@
       ],
       "title": "TestResult",
       "type": "object"
+    },
+    "ValidationRule": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "minLength": 1,
+          "title": "Field",
+          "type": "string"
+        },
+        "rule": {
+          "minLength": 1,
+          "title": "Rule",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        }
+      },
+      "required": [
+        "field",
+        "rule"
+      ],
+      "title": "ValidationRule",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -527,11 +784,29 @@
       "title": "Accessibility Snapshot",
       "type": "string"
     },
+    "parsed_spec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Spec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "discovered_elements": {
       "items": {
         "$ref": "#/$defs/ElementCatalogEntry"
       },
       "title": "Discovered Elements",
+      "type": "array"
+    },
+    "test_cases": {
+      "items": {
+        "$ref": "#/$defs/TestCase"
+      },
+      "title": "Test Cases",
       "type": "array"
     },
     "test_results": {

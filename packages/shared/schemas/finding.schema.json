@@ -64,7 +64,7 @@
           "title": "Value"
         },
         "timeout_ms": {
-          "default": 5000,
+          "default": 10000,
           "exclusiveMinimum": 0,
           "maximum": 120000,
           "title": "Timeout Ms",

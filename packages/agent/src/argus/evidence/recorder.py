@@ -117,7 +117,7 @@ class EvidenceRecorder:
         self.redactor = EvidenceRedactor.for_steps(
             self.steps, secret_values=secret_values, synthetic_values=synthetic_values,
         )
-        self.current_step_index = 0
+        self.current_step_index: int | None = None
         self._network_entries: list[dict[str, Any]] = []
         self._pending_requests: dict[tuple[int, str, str], deque[dict[str, Any]]] = defaultdict(deque)
         self.console: list[ConsoleEvent] = []
@@ -179,6 +179,7 @@ class EvidenceRecorder:
             level=level,
             message=self.redactor.redact_text(message.text) or "",
             timestamp=self._now(),
+            step_index=self.current_step_index,
         ))
 
     async def begin_step(self, step_index: int, element: Locator | None = None,
@@ -235,7 +236,13 @@ class EvidenceRecorder:
         self.step_evidence.append(evidence)
         return evidence
 
-    async def finish(self, *, actual: str) -> Evidence:
+    async def finish(
+        self,
+        *,
+        actual: str,
+        failure_kind: str | None = None,
+        failed_step_index: int | None = None,
+    ) -> Evidence:
         """Flush traces, serialize logs, and return an F-01-validated Evidence."""
         if self._finished:
             raise RuntimeError("EvidenceRecorder.finish() can only be called once")
@@ -268,6 +275,8 @@ class EvidenceRecorder:
             "steps": [self.redactor.redact_step(step).model_dump(mode="json") for step in self.steps],
             "expected": self.redactor.redact_text(self.expected) or "",
             "actual": self.redactor.redact_text(actual) or "",
+            "failure_kind": failure_kind,
+            "failed_step_index": failed_step_index,
             "network": network,
             "console": console,
             "screenshots": self.screenshots + [item.element_screenshot for item in self.step_evidence
