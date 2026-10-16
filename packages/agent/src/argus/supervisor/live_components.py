@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -25,6 +26,8 @@ from argus_contracts.models import (
 from argus.browser.screencast import CdpScreencastCapture
 from argus.models import ModelGateway
 
+logger = logging.getLogger(__name__)
+
 
 class LiveEventBus:
     def __init__(self, layout: RunArtifactLayout) -> None:
@@ -35,25 +38,102 @@ class LiveEventBus:
 
 
 class LiveSpecParser:
-    def __init__(self, run_id: str, gateway: ModelGateway) -> None:
+    def __init__(
+        self,
+        run_id: str,
+        gateway: ModelGateway,
+        *,
+        target_url: str | None = None,
+        layout: RunArtifactLayout | None = None,
+        on_screencast_frame: Callable[[dict], None] | None = None,
+    ) -> None:
         self.run_id = run_id
         self.gateway = gateway
+        self.target_url = target_url
+        self.layout = layout
+        self.on_screencast_frame = on_screencast_frame
 
     def parse(self, description: str) -> Spec:
         from argus.spec.parser import parse_spec
 
-        return asyncio.run(parse_spec(description, gateway=self.gateway, run_id=self.run_id))
+        async def parse_with_preview() -> Spec:
+            spec_task = asyncio.create_task(
+                parse_spec(description, gateway=self.gateway, run_id=self.run_id)
+            )
+            if not (self.target_url and self.layout and self.on_screencast_frame):
+                return await spec_task
+
+            from argus.browser.session import BrowserSessionFactory
+            from playwright.async_api import Error as PlaywrightError
+
+            factory = BrowserSessionFactory(artifact_dir=self.layout.artifacts_dir)
+            session = None
+            capture = None
+            try:
+                try:
+                    await factory.start()
+                    session, cdp_session = await factory.new_context("chromium")
+                    if cdp_session is not None:
+                        capture = CdpScreencastCapture(
+                            cdp_session, self.on_screencast_frame, page=session.page,
+                        )
+                        await capture.start()
+                    try:
+                        await session.page.goto(
+                            self.target_url,
+                            wait_until="domcontentloaded",
+                            timeout=15_000,
+                        )
+                    except PlaywrightError as exc:
+                        logger.warning("Browser preview navigation failed: %s", exc)
+                except Exception:
+                    # A preview must not prevent a run from testing a target if
+                    # its browser cannot launch. The live run will report its
+                    # own browser/setup failure at the testing phase.
+                    logger.exception("Unable to start browser preview for run %s", self.run_id)
+
+                # Keep the preview context alive while the model call is in
+                # flight so the UI receives frames instead of waiting through
+                # the spec parser's potentially slow response.
+                return await spec_task
+            finally:
+                try:
+                    if capture is not None:
+                        await capture.stop()
+                finally:
+                    try:
+                        if session is not None:
+                            await session.close()
+                    finally:
+                        await factory.close()
+
+        return asyncio.run(parse_with_preview())
 
 
 class LiveExplorer:
-    def __init__(self, layout: RunArtifactLayout) -> None:
+    def __init__(
+        self,
+        layout: RunArtifactLayout,
+        *,
+        on_screencast_frame: Callable[[dict], None] | None = None,
+        on_action: Callable[[dict], None] | None = None,
+    ) -> None:
         self.layout = layout
+        self.on_screencast_frame = on_screencast_frame
+        self.on_action = on_action
 
     def explore(self, target_url: str) -> tuple[AppGraph, list[ElementCatalogEntry]]:
         from argus.agents.explorer_crawler import crawl_app
 
         graph_path = self.layout.run_dir / "app_graph.json"
-        graph = asyncio.run(crawl_app(target_url, graph_path))
+        graph = asyncio.run(
+            crawl_app(
+                target_url,
+                graph_path,
+                on_screencast_frame=self.on_screencast_frame,
+                on_action=self.on_action,
+            )
+        )
         # The graph can contain multiple captures of a control in different
         # states. Keep a stable first-seen catalog for the binder.
         elements: dict[str, ElementCatalogEntry] = {}
@@ -133,7 +213,9 @@ class LiveTester:
                             artifact_id="case-" + re.sub(r"[^A-Za-z0-9._-]", "_", case.id)[:100],
                         )
                         screencast = (
-                            CdpScreencastCapture(cdp_session, self.on_screencast_frame)
+                            CdpScreencastCapture(
+                                cdp_session, self.on_screencast_frame, page=session.page,
+                            )
                             if cdp_session is not None and self.on_screencast_frame is not None
                             else None
                         )
@@ -271,8 +353,18 @@ def build_live_components(
     fixtures = GoldenFixtures()
     registry = build_demo_registry(fixtures, layout)
     factories = {
-        "spec_parser": lambda: LiveSpecParser(run_id, gateway),
-        "explorer": lambda: LiveExplorer(layout),
+        "spec_parser": lambda: LiveSpecParser(
+            run_id,
+            gateway,
+            target_url=target_url,
+            layout=layout,
+            on_screencast_frame=on_screencast_frame,
+        ),
+        "explorer": lambda: LiveExplorer(
+            layout,
+            on_screencast_frame=on_screencast_frame,
+            on_action=on_action,
+        ),
         "playbook": LivePlaybook,
         "binder": lambda: LiveBinder(run_id, gateway),
         "tester": lambda: LiveTester(

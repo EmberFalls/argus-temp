@@ -36,6 +36,13 @@ from argus.run_store import RunStore
 from argus.supervisor.live_components import build_live_components
 
 logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+logging.getLogger("argus").setLevel(logging.INFO)
+
 app = FastAPI(title="Argus QA API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
@@ -129,6 +136,7 @@ class RunService:
             else:
                 target_url = str(request.url)
                 layout = RunArtifactLayout(self.store.runs_root, run_id)
+                logger.info("Starting live run %s against %s", run_id, target_url)
 
                 def run_graph() -> None:
                     components = build_live_components(
@@ -224,6 +232,11 @@ def _validate_target(request: CreateRunRequest) -> None:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "argus-agent"}
+
+
+@app.get("/v1/models")
+async def list_models() -> dict[str, Any]:
+    return {"object": "list", "data": []}
 
 
 @app.post("/runs", status_code=202, dependencies=[Depends(require_api_token)])

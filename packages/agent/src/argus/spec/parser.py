@@ -43,12 +43,99 @@ def claim_id(statement: str) -> str:
     return f"claim-{digest}"
 
 
+# Journey parsing only needs semantic actions. The full TestCase schema includes
+# playbook assertion verbs and makes structured generation extremely slow.
+_PARSER_STEP_ACTIONS = (
+    "goto", "click", "fill", "hover", "wait", "assert", "press", "type_text",
+)
+
+
 def _model_schema(*, min_journeys: int = 1) -> dict:
-    # Keep the same source of truth used by the API and shared schema generator.
-    schema = Spec.model_json_schema(by_alias=True)
-    if min_journeys > 1:
-        schema["properties"]["journeys"]["minItems"] = min_journeys
-    return schema
+    """Compact JSON Schema for spec extraction, not the full TestCase contract."""
+    step_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["action"],
+        "properties": {
+            "action": {"type": "string", "enum": list(_PARSER_STEP_ACTIONS)},
+            "locator": {"type": "string"},
+            "value": {"type": ["string", "null"]},
+            "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 120000},
+        },
+    }
+    journey_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["id", "journey", "description", "steps"],
+        "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "journey": {"type": "string", "minLength": 1},
+            "description": {"type": "string", "minLength": 1},
+            "steps": {"type": "array", "items": step_schema},
+            "expected": {"type": "string"},
+            "claim_ids": {"type": "array", "items": {"type": "string"}},
+            "category": {"type": "string", "enum": ["journey", "edge_case"]},
+            "source": {"type": "string", "enum": ["spec", "playbook"]},
+        },
+    }
+    return {
+        "title": "Spec",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["description", "journeys", "claims"],
+        "properties": {
+            "description": {"type": "string", "minLength": 1},
+            "journeys": {
+                "type": "array",
+                "minItems": min_journeys,
+                "items": journey_schema,
+            },
+            "claims": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["id", "statement"],
+                    "properties": {
+                        "id": {"type": "string", "minLength": 1},
+                        "statement": {"type": "string", "minLength": 1},
+                        "priority": {
+                            "type": "string",
+                            "enum": ["critical", "high", "normal", "low"],
+                        },
+                        "journey_ids": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            },
+            "entities": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["name"],
+                    "properties": {
+                        "name": {"type": "string", "minLength": 1},
+                        "description": {"type": "string"},
+                        "fields": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            },
+            "validation_rules": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["field", "rule"],
+                    "properties": {
+                        "field": {"type": "string", "minLength": 1},
+                        "rule": {"type": "string", "minLength": 1},
+                        "message": {"type": ["string", "null"]},
+                    },
+                },
+            },
+            "auth_requirements": {"type": "array", "items": {"type": "string"}},
+        },
+    }
 
 
 def _source_prompt(description: str, context: Mapping[str, str] | None) -> str:
@@ -89,7 +176,16 @@ async def parse_spec(
         system=SYSTEM_PROMPT,
         prompt=_source_prompt(description, context),
         schema=_model_schema(min_journeys=min_journeys),
+        # Sign-in and other focused specs should not reserve the gateway's
+        # full 8k-token ceiling. Conduit still gets room for its six journeys.
+        max_tokens=3500 if min_journeys > 1 else 1800,
     )
+    # Compact parser schema treats these as optional; fill contract defaults.
+    data.setdefault("entities", [])
+    data.setdefault("validation_rules", [])
+    data.setdefault("auth_requirements", [])
+    if not data.get("description"):
+        data["description"] = description.strip()
     # The gateway validates the JSON shape. Pydantic validation remains at this
     # domain boundary as protection for alternate StructuredModel adapters.
     spec = Spec.model_validate(data)

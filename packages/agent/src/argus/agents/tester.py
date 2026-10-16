@@ -166,6 +166,10 @@ async def _action_payload(page: Page, step: Step, step_index: int, case: TestCas
     element = _step_element(page, step)
     if element is not None:
         try:
+            try:
+                await element.first.scroll_into_view_if_needed(timeout=500)
+            except PlaywrightError:
+                pass
             box = await element.first.bounding_box()
             viewport = await page.evaluate("() => ({width: innerWidth, height: innerHeight})")
             if box is not None:

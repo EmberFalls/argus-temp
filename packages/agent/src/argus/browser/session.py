@@ -80,12 +80,20 @@ class BrowserSession:
         self._closed = True
         try:
             if self.recording.trace:
-                await self.context.tracing.stop(path=str(self.trace_path))
+                try:
+                    await self.context.tracing.stop(path=str(self.trace_path))
+                except PlaywrightError:
+                    pass
             if self.cdp_session is not None:
-                await self.cdp_session.detach()
+                try:
+                    await self.cdp_session.detach()
+                except PlaywrightError:
+                    pass
         finally:
             try:
                 await self.context.close()
+            except PlaywrightError:
+                pass
             finally:
                 if self._factory is not None:
                     self._factory._release(self)
