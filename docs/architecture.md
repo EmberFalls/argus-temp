@@ -2,19 +2,15 @@
 
 Argus separates browser observations, deterministic execution, decision rules, and report generation. The browser is treated as an untrusted target: target page text is evidence, never agent instructions.
 
-## Stage 2 request flow
+## Supervisor flow
 
-1. CLI/API validates URL and run inputs.
-2. Explorer captures the accessibility snapshot and semantic controls.
-3. Tester executes explicit journey steps in an isolated browser context while collecting console, HTTP, DOM, and screenshot evidence.
-4. Oracles flag deterministic failures; the Evidence Gate can replay a finding and only accepts reproducible results.
-5. Reporter emits a structured report and exports passing journeys as Playwright tests.
+The CLI and the API's real-run path use a sequential LangGraph pipeline: parse spec → explore → generate tests → bind → test → oracles → evidence gate → Red Team → deduplicate → report → export. Each phase is a separate checkpointed node, emits `phase_changed` and `agent_active`, and owns its state outputs. SQLite checkpoints are stored at `runs/<run_id>/checkpoints.sqlite3`; CLI runs can resume with `argus resume <run_id>`. The component registry supplies fixture or live role implementations. The API forwards tester actions and CDP frames to its SSE and WebSocket clients.
 
-Each state field has a single writer through `supervisor/state_writer.py`. The initial supervisor runs these steps sequentially. Parallel dispatch and model-backed Explorer/Red Team are planned interfaces, not currently claimed functionality.
+Browser execution records console, HTTP, DOM, screenshot, and trace evidence in isolated contexts. The Red Team adapter remains inconclusive until an independent model reviewer is configured, so the Reporter will not claim a finding is Red-Team-confirmed in its absence. Fixture API runs replay the checked-in golden run; real API runs invoke the LangGraph pipeline.
 
 ## Packages
 
-`packages/agent` owns runtime behavior. `packages/shared/schemas` publishes JSON Schema for consumers. `packages/ui` is a lightweight dashboard shell that can consume the API. Sample apps and the benchmark harness are kept outside the runtime package so benchmark truth can be managed independently.
+`packages/agent` owns runtime behavior. `packages/shared/schemas` publishes JSON Schema for consumers. `packages/ui` consumes API run events for live findings and agent activity, and can replay the golden event fixture. Sample apps and the benchmark harness are kept outside the runtime package so benchmark truth can be managed independently.
 
 ## Trust boundaries
 

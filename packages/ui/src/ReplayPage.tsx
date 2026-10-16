@@ -4,8 +4,12 @@ import "@/lib/panels";
 import { getPanel, getPanels } from "@/lib/panels/registry";
 import { runStore, useRunStore } from "@/lib/run-store";
 import { LiveView } from "@/components/live-view";
+import { Scoreboard } from "@/components/scoreboard";
+import { FindingsFeed } from "@/components/findings-feed";
+import { AgentActivity } from "@/components/agent-activity";
 import fixtureText from "../../../fixtures/run_events.ndjson?raw";
 import "./styles/replay.css";
+import "./styles/d04.css";
 
 interface FixtureLoadState { error: string | null; loaded: boolean }
 
@@ -61,7 +65,12 @@ export default function ReplayPage() {
             <article><span>Target</span><strong>{targetUrl(runStore.getState().events[0])}</strong></article>
             <article><span>Replay status</span><strong>{status === "complete" ? "Completed" : status === "running" ? "In progress" : "Ready"}</strong></article>
           </section>
+          <Scoreboard />
           <LiveView runId={runId} fixtureSrc="/fixtures/fixture-browser-frame.svg" demoCursorRun={cursorDemoRun} />
+          <div className="d04-panels">
+            <FindingsFeed />
+            <AgentActivity />
+          </div>
           <section className="replay-controls" aria-label="Fixture replay controls">
             <button onClick={() => setCursorDemoRun((run) => run + 1)}>↗ Play 5s cursor demo</button>
             {!playing ? <button className="replay-primary" onClick={() => status === "idle" || status === "complete" ? runStore.start() : runStore.resume()} disabled={!loadState.loaded || !!loadState.error}>▶ {status === "complete" ? "Replay again" : status === "running" ? "Resume" : "Start replay"}</button> : <button className="replay-primary" onClick={() => runStore.pause()}>Ⅱ Pause</button>}

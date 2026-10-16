@@ -31,7 +31,7 @@ If PowerShell blocks environment activation, run `Set-ExecutionPolicy -Scope Pro
 
 ## Run the offline walking skeleton
 
-The skeleton exercises all role interfaces with golden fixtures. It does not start a browser or contact a target application:
+The backwards-compatible top-level skeleton exercises all role interfaces with golden fixtures. It does not start a browser or contact a target application:
 
 ```sh
 argus --stubs
@@ -45,21 +45,31 @@ argus --stubs --real explorer,tester
 
 These built-in replacements demonstrate the registry and contract boundary; they still delegate to fixture data. The command creates a run under `artifacts/runs/<run_id>/`, including `events.ndjson`, `state.json`, exported tests, and a bug report. From an installed development checkout, `make skeleton` runs the same offline command.
 
+To exercise the LangGraph orchestration with fixtures and optional role swaps, use `argus run --stubs`. This graph mode is also offline and writes a SQLite checkpoint. The bare `argus --stubs` form remains the original walking skeleton.
+
 ## Run against a web application
 
-Start your target app, then run Argus with its URL and a short description of expected behavior. The existing live runner opens the URL, inventories the page, and executes journeys only when you pass `--journeys`:
+Start your target app, then run Argus with its URL and expected behavior. The live CLI runs the sequential LangGraph pipeline; `--spec` accepts a short description or a Markdown file path:
 
 ```sh
-argus --url http://localhost:3100 --spec "Check the home page loads"
+argus run http://localhost:3100 --spec spec.md
 ```
 
-To try a deterministic journey, pass a JSON file containing an array of `TestCase` objects. The checked-in golden cases describe Conduit and are intended for that sample app, so use them with the sample app rather than an unrelated site:
+The run creates a unique ID and writes events, state, browser evidence, exported tests, reports, and a SQLite graph checkpoint beneath `artifacts/runs/<run_id>/`. If the process is interrupted, resume the same run with:
+
+```sh
+argus resume <run_id>
+```
+
+The live spec parser and ambiguous-step binder use the configured `cheap` model route. Set `ARGUS_MODEL_CHEAP_NAME` and `ARGUS_MODEL_CHEAP_BASE_URL` (and `ARGUS_MODEL_CHEAP_API_KEY` when required by your provider) before a live run. Without a model route, use `argus run --stubs` to exercise the full orchestration offline.
+
+To supply explicit journeys, pass a JSON file containing an array of `TestCase` objects. The checked-in golden cases describe Conduit and are intended for that sample app, so use them with the sample app rather than an unrelated site:
 
 ```sh
 argus --url http://localhost:3100 --spec "Users can sign in and create an article" --journeys fixtures/test_cases.json --output artifacts
 ```
 
-`argus --help` shows both the explicit `run` command and the backwards-compatible top-level run options.
+The original `argus --url ...` syntax remains available as a backwards-compatible shortcut. `argus --help` shows both forms.
 
 Capture one page and write its ARIA snapshot, typed element catalog, state signature, and compact prompt rendering to JSON with:
 
@@ -102,12 +112,12 @@ With that API running, the frontend can submit `https://example.com`. The CLI do
 
 ## CLI options
 
-Use `argus --help` for the command list and `argus run --help` for run options. Both `argus run --stubs` and the backwards-compatible `argus --stubs` form work:
+Use `argus --help` for the command list and `argus run --help` for run options:
 
 | Option | Required? | Description |
 |---|---:|---|
-| `--url TEXT` | For a live run | Target web application URL. Not required with `--stubs`. |
-| `--spec TEXT` | For a live run | Short description of expected application behavior. Not required with `--stubs`. |
+| `URL` / `--url TEXT` | For a live run | Target web application URL. Not required with `--stubs`. |
+| `--spec TEXT` | For a live run | Expected behavior description or path to a Markdown spec file. Not required with `--stubs`. |
 | `--output PATH` | No | Directory for run evidence. Defaults to `artifacts`. |
 | `--journeys PATH` | No | JSON array of explicit `TestCase` objects to execute. |
 | `--stubs` | No | Run against golden fixture data without a browser or network access. |
@@ -121,7 +131,8 @@ argus --help
 argus run --help
 argus run --stubs --output artifacts/demo
 argus --stubs --output artifacts/demo
-argus --url http://localhost:3100 --spec "A user can sign in" --output artifacts/login-run
+argus run http://localhost:3100 --spec spec.md --output artifacts/login-run
+argus resume <run_id> --output artifacts/login-run
 ```
 
 ## Run the frontend and backend API

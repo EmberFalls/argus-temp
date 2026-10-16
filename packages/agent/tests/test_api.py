@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from argus import api
 from argus.api import RunService
 from argus.run_store import RunStore
-from argus_contracts.models import Spec
+from argus_contracts.models import Spec, Step, TestCase
 from fastapi.testclient import TestClient
 
 
@@ -78,12 +78,26 @@ def test_real_run_start_and_api_token_protection(tmp_path, monkeypatch):
     _configure_api(monkeypatch, tmp_path, token="local-test-token")
     monkeypatch.setenv("ARGUS_API_TOKEN", "local-test-token")
 
-    async def parse_spec_without_provider(description: str, **_kwargs) -> Spec:
-        # This API integration test covers browser/API behavior, not model-provider
-        # configuration. Keep the parser deterministic so CI needs no credentials.
-        return Spec(description=description)
+    journey = TestCase(
+        id="api-journey",
+        journey="Continue",
+        description="Click the Continue button.",
+        expected="The target remains available.",
+        steps=[Step(action="click", locator='role=button[name="Continue"]')],
+    )
 
-    monkeypatch.setattr("argus.supervisor.loop.parse_spec", parse_spec_without_provider)
+    def parse_spec_without_provider(_self, description: str) -> Spec:
+        # Keep this API integration test independent of model-provider credentials.
+        return Spec(description=description, journeys=[journey])
+
+    monkeypatch.setattr(
+        "argus.supervisor.live_components.LiveSpecParser.parse",
+        parse_spec_without_provider,
+    )
+    monkeypatch.setattr(
+        "argus.supervisor.live_components.LivePlaybook.generate",
+        lambda _self, _spec: [],
+    )
 
     class TargetHandler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -115,11 +129,16 @@ def test_real_run_start_and_api_token_protection(tmp_path, monkeypatch):
             frames = _sse_frames(events.text)
             assert [sequence for sequence, _ in frames] == list(range(len(frames)))
             event_types = [event["type"] for _, event in frames]
-            assert event_types[:3] == ["run_started", "action", "page_discovered"]
+            assert event_types[0] == "run_started"
+            assert "phase_changed" in event_types
+            assert "agent_active" in event_types
+            assert "page_discovered" in event_types
+            assert "action" in event_types
             assert event_types[-1] == "run_completed"
             assert "error" not in event_types
-            assert frames[1][1]["payload"]["action"] == "inspect"
-            assert frames[1][1]["payload"]["rationale"]
+            action = next(event for _, event in frames if event["type"] == "action")
+            assert action["payload"]["action"] == "click"
+            assert action["payload"]["rationale"]
             resumed = client.get(
                 f"/runs/{run_id}/events",
                 headers={**headers, "Last-Event-ID": "0"},
@@ -129,7 +148,8 @@ def test_real_run_start_and_api_token_protection(tmp_path, monkeypatch):
             )
             detail = client.get(f"/runs/{run_id}", headers=headers).json()
             assert detail["status"] == "completed"
-            assert detail["summary"]["accessibility_snapshot"]
+            assert detail["summary"]["app_graph"]["nodes"]
+            assert detail["summary"]["test_results"][0]["verdict"] == "PASS"
     finally:
         target_server.shutdown()
         target_server.server_close()
