@@ -67,6 +67,16 @@ class Spec(ContractModel):
     auth_requirements: list[str] = Field(default_factory=list)
 
 
+class BindingResult(ContractModel):
+    """Case-level result of mapping abstract actions to discovered controls."""
+
+    test_case: TestCase
+    verdict: Literal["BOUND", "INCONCLUSIVE"]
+    reason: str = ""
+    deterministic_steps: list[int] = Field(default_factory=list)
+    model_steps: list[int] = Field(default_factory=list)
+
+
 class ElementCatalogEntry(ContractModel):
     id: str = Field(min_length=1)
     role: str = Field(min_length=1)

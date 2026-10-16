@@ -22,6 +22,9 @@
       "$ref": "#/$defs/Spec"
     },
     {
+      "$ref": "#/$defs/BindingResult"
+    },
+    {
       "$ref": "#/$defs/ElementCatalogEntry"
     },
     {
@@ -371,6 +374,48 @@
         "description"
       ],
       "title": "Spec",
+      "type": "object"
+    },
+    "BindingResult": {
+      "additionalProperties": false,
+      "description": "Case-level result of mapping abstract actions to discovered controls.",
+      "properties": {
+        "test_case": {
+          "$ref": "#/$defs/TestCase"
+        },
+        "verdict": {
+          "enum": [
+            "BOUND",
+            "INCONCLUSIVE"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "deterministic_steps": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Deterministic Steps",
+          "type": "array"
+        },
+        "model_steps": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Model Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "test_case",
+        "verdict"
+      ],
+      "title": "BindingResult",
       "type": "object"
     },
     "ElementCatalogEntry": {

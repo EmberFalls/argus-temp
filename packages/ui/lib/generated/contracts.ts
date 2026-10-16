@@ -46,6 +46,14 @@ export interface Spec {
   "auth_requirements"?: Array<string>;
 }
 
+export interface BindingResult {
+  "test_case": TestCase;
+  "verdict": "BOUND" | "INCONCLUSIVE";
+  "reason"?: string;
+  "deterministic_steps"?: Array<number>;
+  "model_steps"?: Array<number>;
+}
+
 export interface ElementCatalogEntry {
   "id": string;
   "role": string;

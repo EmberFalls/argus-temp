@@ -13,7 +13,7 @@ from argus_contracts import models  # noqa: E402
 
 
 CONTRACT_NAMES = [
-    "SpecClaim", "SpecEntity", "ValidationRule", "Step", "TestCase", "Spec",
+    "SpecClaim", "SpecEntity", "ValidationRule", "Step", "TestCase", "Spec", "BindingResult",
     "ElementCatalogEntry", "AppGraphNode", "AppGraphEdge", "AppGraph", "NetworkEvent", "ConsoleEvent",
     "ReproductionResult", "StepEvidence", "Evidence", "Finding", "GateResult", "VerificationResult",
     "BugReport", "ManifestBug", "RunEvent", "TestResult", "QAState",
