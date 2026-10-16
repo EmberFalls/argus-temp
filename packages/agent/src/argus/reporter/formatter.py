@@ -1,3 +1,9 @@
-from argus.agents.reporter import format_markdown
+"""Public formatter and receipts-validation entry points."""
 
-__all__ = ["format_markdown"]
+from argus.agents.reporter import (
+    ReceiptValidationError,
+    format_markdown,
+    validate_receipts,
+)
+
+__all__ = ["ReceiptValidationError", "format_markdown", "validate_receipts"]
