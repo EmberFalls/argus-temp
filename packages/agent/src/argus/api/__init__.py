@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
@@ -30,8 +31,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from argus.api.screencast import ScreencastHub
 from argus.config import settings
+from argus.graph.build import run_supervisor
 from argus.run_store import RunStore
-from argus.supervisor.loop import run_qa
+from argus.supervisor.live_components import build_live_components
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Argus QA API", version="0.2.0")
@@ -84,7 +86,17 @@ class RunService:
         self.store.create(run_id, str(request.url), request.spec)
         hub = ScreencastHub(run_id)
         self.screencasts[run_id] = hub
-        task = asyncio.create_task(self._execute(run_id, request, mode))
+        event_loop = asyncio.get_running_loop()
+
+        def publish_frame(frame: dict[str, Any]) -> None:
+            event_loop.call_soon_threadsafe(hub.publish_frame, frame)
+
+        def publish_action(action: dict[str, Any]) -> None:
+            event_loop.call_soon_threadsafe(hub.publish_action, action)
+
+        task = asyncio.create_task(
+            self._execute(run_id, request, mode, publish_frame, publish_action)
+        )
         self._tasks[run_id] = task
         task.add_done_callback(lambda _task: self._tasks.pop(run_id, None))
         return {
@@ -101,6 +113,8 @@ class RunService:
         run_id: str,
         request: CreateRunRequest,
         mode: Literal["real", "fixture"],
+        publish_frame: Callable[[dict[str, Any]], None],
+        publish_action: Callable[[dict[str, Any]], None],
     ) -> None:
         self.store.update(run_id, status="running")
         try:
@@ -113,13 +127,27 @@ class RunService:
                     run_id=run_id,
                 )
             else:
-                await run_qa(
-                    str(request.url),
-                    request.spec,
-                    output_dir=self.store.artifact_root,
-                    run_id=run_id,
-                    on_screencast_frame=self.screencasts[run_id].publish_frame,
-                    on_action=self.screencasts[run_id].publish_action,
+                target_url = str(request.url)
+                layout = RunArtifactLayout(self.store.runs_root, run_id)
+
+                def run_graph() -> None:
+                    components = build_live_components(
+                        run_id=run_id,
+                        target_url=target_url,
+                        layout=layout,
+                        on_screencast_frame=publish_frame,
+                        on_action=publish_action,
+                    )
+                    run_supervisor(
+                        components,
+                        target_url=target_url,
+                        spec_description=request.spec,
+                        output_dir=self.store.artifact_root,
+                        run_id=run_id,
+                    )
+
+                await asyncio.to_thread(
+                    run_graph,
                 )
             self.store.update(run_id, status="completed")
         except Exception as exc:
